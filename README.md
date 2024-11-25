@@ -74,28 +74,37 @@ game.play_game()
 ```python
 from input_handler import Responder, InputRequest
 
-class AIResponder(Responder):
+class ModelResponder(Responder):
+    def __init__(self, system_prompt: str = ""):
+        self.system_prompt = system_prompt
+
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
-        # Process context and generate response based on input_type
-        # Return response matching response_format schema
-        pass
+        """Format request for model and parse response"""
+        # This would be implemented with actual LLM integration
+        # For now, just return a mock response
+        raise NotImplementedError("Model responder not yet implemented")
+
 ```
 
 2. Register AI players:
 
+In `GameManager` `__init__`
 ```python
-player_types = {
-    "p1": "human",
-    "p2": "ai",
-    "p3": "ai",
-    "p4": "human",
-    "p5": "ai"
-}
-
-# Register custom responder for AI players
-for pid, ptype in player_types.items():
-    if ptype == "ai":
-        game.input_handler.register_responder(pid, AIResponder())
+class GameManager:
+    def __init__(self, player_ids: List[str], player_names: List[str], player_types: Dict[str, str],
+                 discussion_limit: int = 1):
+        self.game = SecretHitler(player_ids, player_names)
+        self.game.discussion_limit = discussion_limit
+        
+        self.input_handler = InputHandler()
+        self.current_event_index = len(self.game.game_events) - 1
+        
+        # Register responders for each player
+        for pid in player_ids:
+            if player_types[pid] == "human":
+                self.input_handler.register_responder(pid, HumanResponder())
+            else:
+                self.input_handler.register_responder(pid, ModelResponder())
 ```
 
 #### Example HumanResponder
@@ -103,7 +112,7 @@ for pid, ptype in player_types.items():
 The `HumanResponder` `get_response` breaks down the required fields and breaks them into prompts. 
 An LLM responder may instead pass in the context with an API call prompting for a JSON formatted response and validate the response structure. You may prompt for additional chain of thought reasoning so long as you are able to parse out the response format into an appropriate response dict.
 
-```
+```python
 class HumanResponder(Responder):
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
         """Break down the response format into individual prompts for human input"""
@@ -161,13 +170,6 @@ Example context format:
 === Input Request ===
 
 Context:
-
-==================== Game Status ====================
-=== Input Request ===
-
-Context:
-
-==================== Game Status ====================
 
 You are Eve
 Your Role: Fascist
@@ -265,7 +267,6 @@ Reasoning: "Votes: 3/5, Supported by ['Alice', 'Charlie', 'David'], Opposed by [
 
 ##### Prompt
 ```
-
 
 Prompt: Choose a policy to enact
 
