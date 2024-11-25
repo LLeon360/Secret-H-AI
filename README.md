@@ -98,6 +98,51 @@ for pid, ptype in player_types.items():
         game.input_handler.register_responder(pid, AIResponder())
 ```
 
+#### Example HumanResponder
+
+The `HumanResponder` `get_response` breaks down the required fields and breaks them into prompts. 
+An LLM responder may instead pass in the context with an API call prompting for a JSON formatted response and validate the response structure. You may prompt for additional chain of thought reasoning so long as you are able to parse out the response format into an appropriate response dict.
+
+```
+class HumanResponder(Responder):
+    def get_response(self, request: InputRequest) -> Dict[str, Any]:
+        """Break down the response format into individual prompts for human input"""
+        print("\n=== Input Request ===")
+        print("\nContext:")
+        print(request.context)
+        print("\nPrompt:", request.prompt)
+        
+        response = {}
+        
+        for field in request.response_format.required_fields:
+            if field == "choice" and request.options:
+                print("\nOptions:")
+                for i, option in enumerate(request.options, 1):
+                    print(f"{i}. {option}")
+                while True:
+                    try:
+                        choice = int(input("\nEnter your choice (number): ")) - 1
+                        if 0 <= choice < len(request.options):
+                            response["choice"] = choice
+                            break
+                        print("Invalid choice, try again.")
+                    except ValueError:
+                        print("Please enter a number.")
+                        
+            elif field == "confirmation":
+                while True:
+                    value = input(f"\nEnter {field} (y/n): ").lower()
+                    if value in ['y', 'n']:
+                        response[field] = value == 'y'
+                        break
+                    print("Invalid input. Please enter 'y' or 'n'.")
+                    
+            elif field == "justification" or field == "message":
+                response[field] = input(f"\nEnter {field}: ")
+                
+        return response
+```
+
 ## Input/Output Format
 
 ### Game State Context 
