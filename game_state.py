@@ -58,6 +58,13 @@ class PrivateInfo:
     content: Any
     expiry_turn: int
 
+@dataclass
+class PendingVote:
+    player_id: str
+    vote: bool
+    justification: str
+    timestamp: datetime
+
 class SecretHitler:
     def __init__(self, player_ids: List[str], player_names: List[str]):
         if len(player_ids) < 5 or len(player_ids) > 10:
@@ -79,6 +86,8 @@ class SecretHitler:
         self.last_government: Tuple[str, str] = (None, None)
         self.phase = GamePhase.NOMINATING_CHANCELLOR
         self.votes: Dict[str, bool] = {}
+        self.pending_votes: Dict[str, PendingVote] = {}
+        
         self.current_policies: List[PolicyCard] = []
         
         # Logging and discussion state
@@ -260,30 +269,58 @@ class SecretHitler:
         return True
 
     def vote(self, player_id: str, vote: bool, justification: str) -> Optional[bool]:
+        """
+        Handle a player's vote, storing it until all votes are in.
+        Returns: None if more votes needed, True/False when voting complete
+        """
         if self.phase != GamePhase.VOTING or not self.players[player_id].is_alive:
             return None
             
-        self.votes[player_id] = vote
-        
-        # log player's vote
-        self._log_event(
-            GameEventType.VOTE,
-            player_id,
-            {"vote": vote},
-            justification
+        # Store the vote in pending_votes instead of logging immediately
+        self.pending_votes[player_id] = PendingVote(
+            player_id=player_id,
+            vote=vote,
+            justification=justification,
+            timestamp=datetime.now()
         )
+        
+        self.votes[player_id] = vote
         
         if len(self.votes) == len(self.get_active_players()):
             passed = sum(self.votes.values()) > len(self.votes) / 2
             
-            # log system event for election passed or failed
+            # Log all individual votes in chronological order
+            sorted_votes = sorted(
+                self.pending_votes.values(),
+                key=lambda x: x.timestamp
+            )
+            
+            for pending_vote in sorted_votes:
+                self._log_event(
+                    GameEventType.VOTE,
+                    pending_vote.player_id,
+                    {"vote": pending_vote.vote},
+                    pending_vote.justification
+                )
+            
+            # Clear pending votes
+            self.pending_votes.clear()
+            
+            # Log election result
+            supporters = [pid for pid, v in self.votes.items() if v]
+            opposers = [pid for pid, v in self.votes.items() if not v]
+            
             self._log_event(
                 GameEventType.ELECTION_RESULT,
                 "system",
-                {"result": "passed" if passed else "failed", 
-                 "president_id": self.get_president_id(),
-                 "chancellor_id": self.chancellor_id},
-                f"Votes: {sum(self.votes.values())}/{len(self.votes)}, Supported by {[self._get_player_name(p) for p, v in self.votes.items() if v]}, Opposed by {[self._get_player_name(p) for p, v in self.votes.items() if not v]}"
+                {
+                    "result": "passed" if passed else "failed",
+                    "president_id": self.get_president_id(),
+                    "chancellor_id": self.chancellor_id
+                },
+                f"Votes: {sum(self.votes.values())}/{len(self.votes)}, "
+                f"Supported by {[self._get_player_name(p) for p in supporters]}, "
+                f"Opposed by {[self._get_player_name(p) for p in opposers]}"
             )
             
             if passed:
@@ -294,6 +331,7 @@ class SecretHitler:
                 self._advance_president()
                 self.phase = GamePhase.NOMINATING_CHANCELLOR
             return passed
+            
         return None
 
     def president_discard(self, index: int) -> bool:
