@@ -72,8 +72,6 @@ game.play_game()
 1. Implement the `Responder` interface:
 
 ```python
-from input_handler import Responder, InputRequest
-
 class ModelResponder(Responder):
     def __init__(self, system_prompt: str = ""):
         self.system_prompt = system_prompt
@@ -86,7 +84,11 @@ class ModelResponder(Responder):
 
 ```
 
+Your responder may keep track of additional state as well for memory purposes and you can prompt for planning chains of thought as long as the final response is parsed into the expected format.
+
 2. Register AI players:
+
+Register your Responder implementation based on a player type.
 
 In `GameManager` `__init__`
 ```python
@@ -95,9 +97,7 @@ class GameManager:
                  discussion_limit: int = 1):
         self.game = SecretHitler(player_ids, player_names)
         self.game.discussion_limit = discussion_limit
-        
         self.input_handler = InputHandler()
-        self.current_event_index = len(self.game.game_events) - 1
         
         # Register responders for each player
         for pid in player_ids:
@@ -112,45 +112,75 @@ class GameManager:
 The `HumanResponder` `get_response` breaks down the required fields and breaks them into prompts. 
 An LLM responder may instead pass in the context with an API call prompting for a JSON formatted response and validate the response structure. You may prompt for additional chain of thought reasoning so long as you are able to parse out the response format into an appropriate response dict.
 
+<details>
+  <summary>Human Responder Example</summary>
+
 ```python
 class HumanResponder(Responder):
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
-        """Break down the response format into individual prompts for human input"""
         print("\n=== Input Request ===")
         print("\nContext:")
         print(request.context)
-        print("\nPrompt:", request.prompt)
         
         response = {}
         
-        for field in request.response_format.required_fields:
-            if field == "choice" and request.options:
+        for field in request.fields:
+            print(f"\n{field.prompt}")
+            
+            if field.field_type == "choice" and field.options:
                 print("\nOptions:")
-                for i, option in enumerate(request.options, 1):
+                for i, option in enumerate(field.options, 1):
                     print(f"{i}. {option}")
+                
                 while True:
+                    if not field.required:
+                        print("(Press Enter to skip)")
                     try:
-                        choice = int(input("\nEnter your choice (number): ")) - 1
-                        if 0 <= choice < len(request.options):
-                            response["choice"] = choice
+                        value = input("\nEnter your choice (number): ").strip()
+                        if not field.required and not value:
+                            response[field.name] = field.default
+                            break
+                        choice = int(value) - 1
+                        if 0 <= choice < len(field.options):
+                            response[field.name] = choice
                             break
                         print("Invalid choice, try again.")
                     except ValueError:
                         print("Please enter a number.")
                         
-            elif field == "confirmation":
+            elif field.field_type == "boolean":
                 while True:
-                    value = input(f"\nEnter {field} (y/n): ").lower()
+                    if not field.required:
+                        print("(Press Enter to skip)")
+                    value = input(f"\nEnter choice (y/n): ").lower().strip()
+                    if not field.required and not value:
+                        response[field.name] = field.default
+                        break
                     if value in ['y', 'n']:
-                        response[field] = value == 'y'
+                        response[field.name] = value == 'y'
                         break
                     print("Invalid input. Please enter 'y' or 'n'.")
                     
-            elif field == "justification" or field == "message":
-                response[field] = input(f"\nEnter {field}: ")
-                
+            elif field.field_type == "text":
+                while True:
+                    if not field.required:
+                        print("(Press Enter to skip)")
+                    value = input(f"\nEnter your response: ").strip()
+                    if not value:
+                        if not field.required:
+                            response[field.name] = field.default
+                            break
+                        elif field.required:
+                            print("This field is required.")
+                            continue
+                    else:
+                        response[field.name] = value
+                        break
+        
         return response
 ```
+
+</details>
 
 ## Input/Output Format
 
