@@ -183,7 +183,6 @@ Example response format:
 
 ### Examples
 
-
 #### Example 1
 
 ##### Context
@@ -255,6 +254,8 @@ Explain your nomination:
 Enter your response: idk just a hunch good guy
 
 ```
+<details>
+  <summary>Example 2</summary>
 
 #### Example 2
 
@@ -333,6 +334,7 @@ Explain your vote:
 
 Enter your response:
 ```
+</details>
 
 ## Events and Logging
 
