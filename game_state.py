@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Union, Any
 from dataclasses import dataclass
 from datetime import datetime
 import random
@@ -39,24 +39,93 @@ class Player:
     is_alive: bool = True
 
 @dataclass
-class GameEvent:
-    event_type: GameEventType
-    timestamp: datetime
-    actor_id: str
-    action_details: Dict[str, Any]
-    justification: Optional[str] = None
-    discussion: List[Dict[str, str]] = None
+class PolicyChoiceContent:
+    """Content for policy selection private info"""
+    role: str  # "president" or "chancellor"
+    policies_seen: List[str]  # All policies that were seen
+    discarded: str  # The policy that was discarded
+    claimed_discard: Optional[str]  # What they claimed to discard (or None if undisclosed)
+    remaining: List[str]  # Policies after discard (for president)
+    enacted: Optional[str] = None  # Only for chancellor, the policy actually enacted
 
-    def __post_init__(self):
-        if self.discussion is None:
-            self.discussion = []
+@dataclass
+class PolicyPeekContent:
+    """Content for policy peek power"""
+    upcoming_policies: List[str]
+
+@dataclass
+class InvestigationContent:
+    """Content for investigation power"""
+    target_id: str
+    party_membership: str
+
+@dataclass
+class GovernmentInfo:
+    """Metadata about the government when action occurred"""
+    president_id: str
+    chancellor_id: str
+    policy_counts: Dict[str, int]  # Current liberal/fascist counts
 
 @dataclass
 class PrivateInfo:
     recipient_id: str
-    info_type: str
-    content: Any
+    info_type: str  # "policy_choice", "policy_peek", "investigation"
+    content: Union[PolicyChoiceContent, PolicyPeekContent, InvestigationContent]
+    created_at_turn: int
     expiry_turn: int
+    related_event_id: str  # ID of the public event this private info relates to
+    government: GovernmentInfo  # Government info when this occurred
+    phase: GamePhase  # Game phase when this occurred
+
+@dataclass
+class DiscussionMessage:
+    player_id: str
+    message: str
+    timestamp: datetime
+
+@dataclass
+class GameEvent:
+    event_id: str
+    event_type: GameEventType
+    turn_number: int
+    phase: GamePhase
+    timestamp: datetime
+    actor_id: str
+    action_details: Dict[str, Any]  # Keeps flexible for different event types
+    justification: Optional[str] = None
+    discussion: List[DiscussionMessage] = None
+    related_events: List[str] = None  # IDs of related events
+
+    def __post_init__(self):
+        if self.discussion is None:
+            self.discussion = []
+        if self.related_events is None:
+            self.related_events = []
+
+@dataclass
+class PlayerRole:
+    """Information about a player's role, used for fascist knowledge"""
+    id: str
+    name: str
+    is_hitler: bool
+
+@dataclass
+class GameState:
+    """Complete game state returned by get_game_state"""
+    turn: int
+    phase: GamePhase
+    liberal_policies: int
+    fascist_policies: int
+    president_id: str
+    chancellor_id: Optional[str]
+    last_government: Tuple[Optional[str], Optional[str]]
+    players: Dict[str, Player]
+    deck_size: int
+    discard_size: int
+    your_role: Optional[Role] = None
+    events: Optional[List[GameEvent]] = None
+    private_info: Optional[List[PrivateInfo]] = None
+    fellow_fascists: Optional[List[PlayerRole]] = None  # Updated to use PlayerRole
 
 @dataclass
 class PendingVote:
@@ -64,6 +133,12 @@ class PendingVote:
     vote: bool
     justification: str
     timestamp: datetime
+
+@dataclass
+class PolicyChoice:
+    policy: PolicyCard
+    justification: str
+    claimed_policy: Optional[str]
 
 class SecretHitler:
     def __init__(self, player_ids: List[str], player_names: List[str]):
@@ -87,13 +162,18 @@ class SecretHitler:
         self.phase = GamePhase.NOMINATING_CHANCELLOR
         self.votes: Dict[str, bool] = {}
         self.pending_votes: Dict[str, PendingVote] = {}
+        self.pending_policy_choice: Optional[PolicyChoice] = None
         
         self.current_policies: List[PolicyCard] = []
         
         # Logging and discussion state
         self.game_events: List[GameEvent] = []
         self.private_info: Dict[str, List[PrivateInfo]] = {pid: [] for pid in player_ids}
+        
         self.current_turn = 0
+        self.turn_phase = 0  # Tracks sub-phases within a turn
+        self.last_event_id = 0  # For generating unique event IDs
+        
         self.discussion_limit = 5
         
         # Initialize the game
@@ -132,18 +212,27 @@ class SecretHitler:
             self.discard_pile = []
             random.shuffle(self.policy_deck)
         return [self.policy_deck.pop() for _ in range(count)]
+    
+    def _generate_event_id(self) -> str:
+        self.last_event_id += 1
+        return f"event_{self.current_turn}_{self.turn_phase}_{self.last_event_id}"
 
     def _log_event(self, 
                    event_type: GameEventType, 
                    actor_id: str, 
                    action_details: Dict[str, Any], 
-                   justification: Optional[str] = None) -> GameEvent:
+                   justification: Optional[str] = None,
+                   related_events: List[str] = None) -> GameEvent:
         event = GameEvent(
+            event_id=self._generate_event_id(),
             event_type=event_type,
+            turn_number=self.current_turn,
             timestamp=datetime.now(),
             actor_id=actor_id,
             action_details=action_details,
-            justification=justification
+            justification=justification,
+            phase=self.phase,
+            related_events=related_events or []
         )
         self.game_events.append(event)
         return event
@@ -164,34 +253,51 @@ class SecretHitler:
         return False
 
     def add_private_info(self, 
-                        recipient_id: str, 
-                        info_type: str, 
-                        content: Any, 
-                        duration_turns: int = 1):
-        expiry_turn = self.current_turn + duration_turns
-        info = PrivateInfo(recipient_id, info_type, content, expiry_turn)
+                        recipient_id: str,
+                        info_type: str,
+                        content: Union[PolicyChoiceContent, PolicyPeekContent, InvestigationContent],
+                        related_event_id: str) -> None:
+        """Add private information with all metadata"""
+        info = PrivateInfo(
+            recipient_id=recipient_id,
+            info_type=info_type,
+            content=content,
+            created_at_turn=self.current_turn,
+            expiry_turn=self.current_turn + 3,  # Most private info lasts 3 turns
+            related_event_id=related_event_id,
+            government=GovernmentInfo(
+                president_id=self.get_president_id(),
+                chancellor_id=self.chancellor_id,
+                policy_counts={
+                    "liberal": self.liberal_policies,
+                    "fascist": self.fascist_policies
+                }
+            ),
+            phase=self.phase
+        )
         self.private_info[recipient_id].append(info)
 
     def get_visible_events(self, player_id: str) -> List[Dict]:
+        """Convert GameEvent objects to dictionary format for the requesting player"""
         return [
             {
                 "event_type": event.event_type.value,
+                "turn_number": event.turn_number,
                 "timestamp": event.timestamp.isoformat(),
-                "actor": self.players[event.actor_id].name,
+                "actor": event.actor_id,  # Keep ID rather than name for consistency
                 "details": event.action_details,
                 "justification": event.justification,
-                "discussion": event.discussion
+                "discussion": event.discussion,
+                "phase": event.phase.value if event.phase else None,
+                "related_events": event.related_events
             }
             for event in self.game_events
         ]
 
-    def get_private_info(self, player_id: str) -> List[Dict]:
+    def get_private_info(self, player_id: str) -> List[PrivateInfo]:
+        """Return unexpired private info for player"""
         return [
-            {
-                "type": info.info_type,
-                "content": info.content
-            }
-            for info in self.private_info[player_id]
+            info for info in self.private_info[player_id]
             if info.expiry_turn >= self.current_turn
         ]
         
@@ -216,40 +322,51 @@ class SecretHitler:
         active_players = list(self.get_active_players().keys())
         return active_players[self.president_index % len(active_players)]
 
-    def get_game_state(self, player_id: Optional[str] = None):
-        state = {
-            "phase": self.phase.value,
-            "liberal_policies": self.liberal_policies,
-            "fascist_policies": self.fascist_policies,
-            "president_id": self.get_president_id(),
-            "chancellor_id": self.chancellor_id,
-            "last_government": self.last_government,
-            "players": {
-                pid: {
-                    "name": p.name,
-                    "is_alive": p.is_alive,
-                } for pid, p in self.get_human_players().items()
-            },
-            "deck_size": len(self.policy_deck),
-            "discard_size": len(self.discard_pile)
-        }
+    def get_game_state(self, player_id: Optional[str] = None) -> GameState:
+        """Get complete game state as dataclass"""
+        state = GameState(
+            turn=self.current_turn,
+            phase=self.phase,
+            liberal_policies=self.liberal_policies,
+            fascist_policies=self.fascist_policies,
+            president_id=self.get_president_id(),
+            chancellor_id=self.chancellor_id,
+            last_government=self.last_government,
+            players=self.get_human_players(),
+            deck_size=len(self.policy_deck),
+            discard_size=len(self.discard_pile)
+        )
         
         if player_id:
-            player_role = self.players[player_id].role
-            state.update({
-                "your_role": player_role.value,
-                "events": self.get_visible_events(player_id),
-                "private_info": self.get_private_info(player_id)
-            })
+            player = self.players[player_id]
+            state.your_role = player.role
+            state.events = self.game_events
+            state.private_info = self.get_private_info(player_id)
             
-            if player_role in [Role.FASCIST, Role.HITLER]:
-                state["fascists"] = [
-                    pid for pid, p in self.get_human_players().items()
-                    if p.role in [Role.FASCIST, Role.HITLER]
+            # Add permanent role knowledge
+            if player.role == Role.FASCIST:
+                state.fellow_fascists = [
+                    PlayerRole(
+                        id=pid,
+                        name=p.name,
+                        is_hitler=p.role == Role.HITLER
+                    )
+                    for pid, p in self.get_human_players().items()
+                    if p.role in [Role.FASCIST, Role.HITLER] and pid != player_id
                 ]
-        
+            elif player.role == Role.HITLER and len(self.get_human_players()) <= 6:
+                state.fellow_fascists = [
+                    PlayerRole(
+                        id=pid,
+                        name=p.name,
+                        is_hitler=False
+                    )
+                    for pid, p in self.get_human_players().items()
+                    if p.role == Role.FASCIST
+                ]
+                
         return state
-
+    
     def nominate_chancellor(self, president_id: str, chancellor_id: str, justification: str) -> bool:
         if (self.phase != GamePhase.NOMINATING_CHANCELLOR or
             chancellor_id == self.get_president_id() or
@@ -334,32 +451,91 @@ class SecretHitler:
             
         return None
 
-    def president_discard(self, index: int) -> bool:
+    def president_discard(self, index: int, claimed_policy: Optional[str], justification: str) -> bool:
         if self.phase != GamePhase.PRESIDENT_DISCARD or not 0 <= index < len(self.current_policies):
             return False
-            
-        self.discard_pile.append(self.current_policies.pop(index))
+
+        # Log the public event
+        policy_event = self._log_event(
+            GameEventType.POLICY_ENACTED,
+            self.get_president_id(),
+            {
+                "action": "discard",
+                "claimed_policy": claimed_policy
+            },
+            justification
+        )
+        
+        # Store private information about actual choice
+        self.add_private_info(
+            recipient_id=self.get_president_id(),
+            info_type="policy_choice",
+            content=PolicyChoiceContent(
+                role="president",
+                policies_seen=[p.value for p in self.current_policies],
+                discarded=self.current_policies[index].value,
+                claimed_discard=claimed_policy,
+                remaining=[p.value for i, p in enumerate(self.current_policies) if i != index]
+            ),
+            related_event_id=policy_event.event_id
+        )
+        
+        # Perform the actual discard
+        discarded_policy = self.current_policies.pop(index)
+        self.discard_pile.append(discarded_policy)
+        
         self.phase = GamePhase.CHANCELLOR_DISCARD
         return True
 
-    def chancellor_discard(self, index: int) -> Optional[str]:
+    def chancellor_discard(self, index: int, claimed_policy: Optional[str], justification: str) -> Optional[str]:
+        """
+        Handle chancellor's policy selection with full metadata tracking.
+        Returns: Enacted policy value or game result if game ends
+        """
         if self.phase != GamePhase.CHANCELLOR_DISCARD or not 0 <= index < len(self.current_policies):
             return None
             
-        self.discard_pile.append(self.current_policies.pop(index))
-        enacted_policy = self.current_policies.pop()
+        # Get policies for game state update
+        discarded_policy = self.current_policies[index]
+        enacted_policy = self.current_policies[1 - index]
         
+        # Log the public event
+        chancellor_event = self._log_event(
+            GameEventType.POLICY_ENACTED,
+            self.chancellor_id,
+            {
+                "action": "enact",
+                "enacted": enacted_policy.value,
+                "claimed_policy": claimed_policy
+            },
+            justification,
+            related_events=[self.game_events[-1].event_id]  # Link to president's event
+        )
+        
+        # Store private information about actual choice
+        self.add_private_info(
+            recipient_id=self.chancellor_id,
+            info_type="policy_choice",
+            content=PolicyChoiceContent(
+                role="chancellor",
+                policies_seen=[p.value for p in self.current_policies],
+                discarded=discarded_policy.value,
+                claimed_discard=claimed_policy,
+                remaining=[],  # Chancellor doesn't pass cards on
+                enacted=enacted_policy.value
+            ),
+            related_event_id=chancellor_event.event_id
+        )
+        
+        # Clear policies and update game state
+        self.current_policies = []
+        self.discard_pile.append(discarded_policy)
+        
+        # Update policy tracks
         if enacted_policy == PolicyCard.LIBERAL:
             self.liberal_policies += 1
         else:
             self.fascist_policies += 1
-            
-        self._log_event(
-            GameEventType.POLICY_ENACTED,
-            self.chancellor_id,
-            {"policy": enacted_policy.value},
-            None
-        )
             
         # Check win conditions
         if self.liberal_policies >= 5:
@@ -369,6 +545,7 @@ class SecretHitler:
             self.phase = GamePhase.GAME_OVER
             return "FASCISTS_WIN"
             
+        # Handle next phase
         if self._requires_power_action():
             self.phase = GamePhase.POWER_ACTION
         else:
@@ -403,9 +580,11 @@ class SecretHitler:
         return True
 
     def _advance_president(self):
+        """Advance to next president and increment turn counters"""
         alive_players = [pid for pid, p in self.players.items() if p.is_alive]
         self.president_index = (self.president_index + 1) % len(alive_players)
         self.current_turn += 1
+        self.turn_phase = 0
         
         # Clean up expired private information
         for player_id in self.private_info:
@@ -420,3 +599,18 @@ class SecretHitler:
     def _requires_power_action(self) -> bool:
         # Implement based on fascist track position
         return False
+    
+    def get_formatted_private_info(self, player_id: str) -> List[Dict]:
+        """Get formatted private info with enhanced context"""
+        return [
+            {
+                "type": info.info_type,
+                "content": info.content,
+                "turn_created": info.created_at_turn,
+                "turns_remaining": info.expiry_turn - self.current_turn,
+                "metadata": info.metadata,
+                "related_event_id": info.related_event_id
+            }
+            for info in self.private_info[player_id]
+            if info.expiry_turn >= self.current_turn
+        ]

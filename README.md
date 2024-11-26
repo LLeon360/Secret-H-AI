@@ -1,4 +1,4 @@
-# Secret Hitler Game State Manager
+# Basilisk - Secret Hitler Game State Manager for Humans and LLMs 
 
 A Python framework for simulating and tracking the state of Secret Hitler games, designed to support both human players and Language Learning Models (LLMs) through a structured input/output interface.
 
@@ -164,120 +164,6 @@ The game state is formatted as natural language text, including:
 - Recent game events
 - Private information (role-specific)
 
-#### Example 1
-Example context format:
-```
-=== Input Request ===
-
-Context:
-
-You are Eve
-Your Role: Fascist
-Current Phase: Voting
-
-Policies Enacted:
-Liberal Track: ⚪⚪⚪⚪⚪ (0/5)
-Fascist Track: ⚪⚪⚪⚪⚪⚪ (0/6)
-
-Current Government:
-President: Alice
-Nominated Chancellor: Bob
-
-Players:
-  • Alice (President)
-  • Bob (Nominated)
-  • Charlie
-  • David
-  • Eve
-
-You know the following players are Fascists:
-  • Alice, Eve
-
-==================== Recent Events ====================
-
-System Game started with 5 players
-Reasoning: "Game initialized"
-
-Alice nominated Bob as Chancellor
-Reasoning: "Well game's just started"
-
-```
-
-##### Prompt
-
-```
-Prompt: Vote on the proposed government
-
-Options:
-1. Ja!
-2. Nein!
-
-Enter your choice (number): 2
-
-Enter justification: erm
-```
-
-#### Example 2
-```
-=== Input Request ===
-
-Context:
-
-==================== Game Status ====================
-
-You are Bob
-Your Role: Liberal
-Current Phase: Chancellor Discard
-
-Policies Enacted:
-Liberal Track: ⚪⚪⚪⚪⚪ (0/5)
-Fascist Track: ⚪⚪⚪⚪⚪⚪ (0/6)
-
-Current Government:
-President: Alice
-Chancellor: Bob
-
-Last Government: Alice (P), Bob (C)
-
-Players:
-  • Alice (President)
-  • Bob (Chancellor)
-  • Charlie
-  • David
-  • Eve
-
-==================== Recent Events ====================
-
-Bob voted Nein!
-Reasoning: "I dont trust myself"
-
-Charlie voted Ja!
-Reasoning: "meh"
-
-David voted Ja!
-Reasoning: "jafsdhljasdkfha"
-
-Eve voted Nein!
-Reasoning: "erm"
-
-System election for President Alice and Chancellor Bob, Result passed
-Reasoning: "Votes: 3/5, Supported by ['Alice', 'Charlie', 'David'], Opposed by ['Bob', 'Eve']"
-
-```
-
-##### Prompt
-```
-
-Prompt: Choose a policy to enact
-
-Options:
-1. Policy: fascist
-2. Policy: liberal
-
-Enter your choice (number):
-
-```
-
 ### Input Requests
 
 Input requests are structured with:
@@ -295,6 +181,159 @@ Example response format:
 }
 ```
 
+### Examples
+
+
+#### Example 1
+
+##### Context
+
+```
+=== Input Request ===
+
+Context:
+
+==================== Game Status ====================
+
+Turn 2
+You are Charlie
+Your Role: Fascist
+Current Phase: Nominating Chancellor
+
+Policies Enacted:
+Liberal Track: 🔵⚪⚪⚪⚪ (1/5)
+Fascist Track: ⚪⚪⚪⚪⚪⚪ (0/6)
+
+Current Government:
+President: Charlie
+
+Last Government: Bob (P), Eve (C)
+
+Players:
+  • Alice
+  • Bob
+  • Charlie (President)
+  • David
+  • Eve (Previously Nominated as Chancellor)
+
+As a Fascist, you know:
+  • David is Hitler
+
+==================== Recent Events ====================
+
+[Turn 1] David voted Nein!
+Reasoning: "sus"
+
+[Turn 1] Eve voted Ja!
+Reasoning: "1"
+
+[Turn 1] Election for President Bob and Chancellor Eve: passed
+Reasoning: "Votes: 4/5, Supported by ['Alice', 'Bob', 'Charlie', 'Eve'], Opposed by ['David']"
+
+[Turn 1] President Bob claims to have discarded a fascist policy
+Reasoning: "im cool like that"
+
+[Turn 1] Chancellor Eve enacted a liberal policy (claims to have discarded a liberal policy)
+Reasoning: "yay"
+
+```
+
+##### Prompt
+
+```
+
+Choose a chancellor candidate:
+
+Options:
+1. Alice
+2. David
+
+Enter your choice (number): 2
+
+Explain your nomination:
+
+Enter your response: idk just a hunch good guy
+
+```
+
+#### Example 2
+
+##### Context
+
+```
+=== Input Request ===
+
+Context:
+
+==================== Game Status ====================
+
+Turn 2
+You are Bob
+Your Role: Liberal
+Current Phase: Voting
+
+Policies Enacted:
+Liberal Track: 🔵⚪⚪⚪⚪ (1/5)
+Fascist Track: ⚪⚪⚪⚪⚪⚪ (0/6)
+
+Current Government:
+President: Charlie
+Nominated Chancellor: David
+
+Last Government: Bob (P), Eve (C)
+
+Players:
+  • Alice
+  • Bob
+  • Charlie (President)
+  • David (Nominated)
+  • Eve
+
+Private Information:
+
+Policy choice as President (1 turns ago):
+Government: You as President with Eve as Chancellor
+Policy counts were: Liberal 0, Fascist 0
+You saw: liberal, liberal, liberal
+You discarded: liberal
+You claimed to discard: fascist
+You passed: liberal, liberal to Chancellor
+(This information expires in 2 turns)
+
+==================== Recent Events ====================
+
+[Turn 1] Eve voted Ja!
+Reasoning: "1"
+
+[Turn 1] Election for President Bob and Chancellor Eve: passed
+Reasoning: "Votes: 4/5, Supported by ['Alice', 'Bob', 'Charlie', 'Eve'], Opposed by ['David']"
+
+[Turn 1] President Bob claims to have discarded a fascist policy
+Reasoning: "im cool like that"
+
+[Turn 1] Chancellor Eve enacted a liberal policy (claims to have discarded a liberal policy)
+Reasoning: "yay"
+
+[Turn 2] Charlie nominated David as Chancellor
+Reasoning: "idk just a hunch good guy"
+```
+
+##### Prompt
+
+```
+Vote on the proposed government:
+
+Options:
+1. Ja!
+2. Nein!
+
+Enter your choice (number): 1
+
+Explain your vote:
+
+Enter your response:
+```
+
 ## Events and Logging
 
 The system maintains a detailed log of game events, including:
@@ -309,7 +348,7 @@ Events are formatted for both human readability and AI processing.
 ## Contributing
 
 Contributions are welcome! Please ensure any pull requests:
-1. Include appropriate tests
+1. Include appropriate tests (don't actually have a testing framework yet X_X)
 2. Follow the existing code style
 3. Update documentation as needed
 
