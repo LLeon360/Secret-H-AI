@@ -1,4 +1,6 @@
-# Basilisk - Secret Hitler Game State Manager for Humans and LLMs 
+# Basilisk 
+
+## Secret Hitler Game State Manager for Humans and LLMs 
 
 A Python framework for simulating and tracking the state of Secret Hitler games, designed to support both human players and Language Learning Models (LLMs) through a structured input/output interface.
 
@@ -107,13 +109,13 @@ class GameManager:
                 self.input_handler.register_responder(pid, ModelResponder())
 ```
 
-#### Example HumanResponder
+### Example HumanResponder
 
 The `HumanResponder` `get_response` breaks down the required fields and breaks them into prompts. 
 An LLM responder may instead pass in the context with an API call prompting for a JSON formatted response and validate the response structure. You may prompt for additional chain of thought reasoning so long as you are able to parse out the response format into an appropriate response dict.
 
 <details>
-  <summary>Human Responder Example</summary>
+  <summary> <h3>Human Responder Example</h3></summary>
 
 ```python
 class HumanResponder(Responder):
@@ -284,11 +286,10 @@ Explain your nomination:
 Enter your response: idk just a hunch good guy
 
 ```
+
 <details>
-  <summary>Example 2</summary>
-
-#### Example 2
-
+  <summary> <h4>Example 2</h4></summary>
+    
 ##### Context
 
 ```
