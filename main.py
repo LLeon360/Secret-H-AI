@@ -7,5 +7,5 @@ if __name__ == "__main__":
     player_types = {pid: "human" for pid in player_ids}
     
     game = GameManager(player_ids, player_names, player_types,
-                       discussion_limit=0)
+                       discussion_limit=5)
     game.play_game()

@@ -145,7 +145,7 @@ class GameManager:
         if event.discussion:
             text.append("\nDiscussion:")
             for msg in event.discussion:
-                text.append(f"  {get_player_name(msg.player_id)}: \"{msg.message}\"")
+                text.append(f"  {get_player_name(msg["player_id"])}: \"{msg["message"]}\"")
                 
         return "\n".join(text)
 
@@ -468,7 +468,7 @@ class GameManager:
     def handle_discussion(self, initiating_player_id: str):
         """Handle discussion phase"""
         active_players = list(self.game.get_active_players().keys())
-        messages_per_player = self.game.discussion_limit // len(active_players)
+        messages_per_player = self.game.discussion_limit 
         
         if messages_per_player < 1:
             return

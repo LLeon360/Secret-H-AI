@@ -243,7 +243,7 @@ class SecretHitler:
                              message: str) -> bool:
         if 0 <= event_index < len(self.game_events):
             event = self.game_events[event_index]
-            if len(event.discussion) < self.discussion_limit:
+            if len(event.discussion) < self.discussion_limit * len(self.get_active_players()): 
                 event.discussion.append({
                     "player_id": player_id,
                     "message": message,
