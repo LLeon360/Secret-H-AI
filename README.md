@@ -39,9 +39,9 @@ basilisk/
 │   ├── base.py           # Responder interface
 │   ├── human/
 │   │   └── responder.py  # Human console interface
-│   └── ollama/
+│   └── llm/
 │       ├── __init__.py
-│       ├── responder.py  # Ollama LLM responder
+│       ├── responder.py  # LLM responder
 │       └── configs/
 │           └── system.txt # System prompt
 └── main.py               # Game setup and initialization
@@ -72,6 +72,8 @@ class CustomResponder(Responder):
         """
         pass
 ```
+
+For details, see `basilisk/responders/llm/responder.py` or `basilisk/responders/llm/human.py` for reference.
 
 ### Input Request Format
 
