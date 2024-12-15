@@ -234,6 +234,8 @@ This approach allows you to:
 Check `basilisk/main.py`
 for a sample game setup.
 
+The current version is making use of Google Gemini, but you may easily switch out the LLM. However, if you use it as is make sure to provide GOOGLE_API_KEY in a `.env` file.
+
 ## Contributing
 
 Contributions are welcome! Please ensure any pull requests:

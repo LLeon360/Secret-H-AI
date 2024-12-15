@@ -3,9 +3,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import json
 import re
-from langchain_community.llms import Ollama
+from langchain_core.language_models.chat_models import BaseChatModel
 
-from ..base import Responder, InputRequest
+from ..base import Responder, InputRequest, InputField
 
 @dataclass
 class Memory:
@@ -22,13 +22,20 @@ class Memory:
         entries = self.entries[-limit:] if limit else self.entries
         return "\n".join(entries) if entries else "No previous memories."
 
-class OllamaResponder(Responder):
+class LLMResponder(Responder):
     def __init__(self, 
-                 system_prompt_path: Optional[str] = None,
-                 model_name: str = "llama2",
-                 memory_size: int = 10):
-        self.llm = Ollama(base_url="http://localhost:11434", model=model_name)
+                 system_prompt_path: Optional[str],
+                 llm: BaseChatModel,
+                 memory_size: int,
+                 max_retries: int = 3,
+                 show_internal_thinking: bool = False,
+                 debug: bool = False):
+        self.llm = llm
         self.memory = Memory(max_items=memory_size)
+        self.max_retries = max_retries
+        self.memory_size = memory_size
+        self.show_internal_thinking = show_internal_thinking
+        self.debug = debug
         
         # Load system prompt
         self.system_prompt = ""
@@ -46,10 +53,26 @@ class OllamaResponder(Responder):
             sections.append(f"System Instructions:\n{self.system_prompt}\n")
             
         # Add memory context
-        sections.append(f"Recent Events:\n{self.memory.get_recent(5)}\n")
+        sections.append(f"Recent Events:\n{self.memory.get_recent(self.memory_size)}\n")
         
         # Add current context
         sections.append(f"Current Situation:\n{request.context}\n")
+        
+        # Add prompt details
+        sections.append(f"You are currently considering the following decisions:\n")
+        
+        for field in request.fields:
+            sections.append(f"- {field.prompt}")
+            if field.required:
+                sections.append("Required: Yes")
+            match field.field_type:
+                case "choice":
+                    sections.append(f"This is a choice, please choose from the following options by selecting an index (0-indexed):\n")
+                    sections.append(f"{''.join(f"{num}. {option}" for num, option in enumerate(field.options))}")
+                case "text":
+                    sections.append("Type: Text Response (Provide a string)")
+                case "boolean":
+                    sections.append("Type: Boolean Response (Provide True or False)")
         
         # Add required response format
         sections.append(
@@ -82,16 +105,32 @@ class OllamaResponder(Responder):
             return json.loads(decision_str)
         except json.JSONDecodeError:
             raise ValueError("Invalid decision JSON format")
+        
+    def _validate_decision(self, decision: Dict[str, Any], fields: List[InputField]) -> bool:
+        """Validate the decision JSON against the required fields and their types"""
+        for field in fields:
+            if field.required and field.name not in decision:
+                return False
+            if field.name in decision:
+                value = decision[field.name]
+                if field.field_type == "choice" and value not in range(len(field.options)):
+                    return False
+                if field.field_type == "boolean" and not isinstance(value, bool):
+                    return False
+                if field.field_type == "text" and not isinstance(value, str):
+                    return False
+        return True
     
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
-        """Get response from model with retries"""
-        max_retries = 3
-        
-        for attempt in range(max_retries):
+        """Get response from model with retries"""        
+        for attempt in range(self.max_retries):
             try:
                 # Get model response
                 prompt = self._build_prompt(request)
-                response = self.llm.generate([prompt])[0].text
+                response = self.llm.invoke([prompt]).content
+                
+                if self.show_internal_thinking:
+                    print(response)
                 
                 # Extract sections
                 if memory_update := self._extract_section(response, "memory_update"):
@@ -100,13 +139,15 @@ class OllamaResponder(Responder):
                 if decision_str := self._extract_section(response, "decision"):
                     decision = self._parse_decision(decision_str)
                     
-                    # Validate required fields
-                    if all(field.name in decision for field in request.fields if field.required):
-                        return decision
-                    
-                raise ValueError("Missing required fields in decision")
+                    # Validate required fields and their types
+                    if not self._validate_decision(decision, request.fields):
+                        if self.debug:
+                            print(f"Invalid decision format or missing required fields: {decision}")
+                        raise ValueError("Invalid decision format or missing required fields")
+
+                    return decision
                 
             except Exception as e:
-                if attempt == max_retries - 1:
-                    raise ValueError(f"Failed to get valid response after {max_retries} attempts: {str(e)}")
+                if attempt == self.max_retries - 1:
+                    raise ValueError(f"Failed to get valid response after {self.max_retries} attempts: {str(e)}")
                 continue

@@ -260,7 +260,7 @@ class GameManager:
 		])
 		
 		if game_state.events:
-			context.extend([self.format_event(event) for event in game_state.events[-5:]])
+			context.extend([self.format_event(event) for event in game_state.events[-15:]])
 		
 		return "\n".join(context)
 
