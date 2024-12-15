@@ -2,228 +2,135 @@
 
 ## Secret Hitler Game State Manager for Humans and LLMs 
 
-A Python framework for simulating and tracking the state of Secret Hitler games, designed to support both human players and Language Learning Models (LLMs) through a structured input/output interface.
+A Python framework for simulating and tracking the state of Secret Hitler games, designed to support both human players and Language Learning Models (LLMs). The system provides a structured way to interact with the game state, making it easy to implement custom AI agents.
 
-## Overview
+## Core Systems Overview
 
-This project provides a robust game state management system for Secret Hitler, with special consideration for AI players. It features:
+### 1. Game State Management
+- Tracks complete game state (roles, policies, votes, etc.)
+- Manages player actions and game flow
+- Handles event logging and private information
+- Enforces game rules and valid actions
 
-- Complete game state tracking and validation
-- Natural language formatting of game state for LLM consumption
-- Structured JSON-based input handling
-- Support for mixed human/AI players
-- Event logging and game history tracking
+### 2. Input/Response System
+- Structured input requests with clear field specifications
+- Consistent response format across all player types
+- Validation of responses
+- Support for different input types (choices, text, boolean)
+
+### 3. Responder Interface
+- Simple, single-method interface for implementing agents
+- Complete game context provided with each request
+- Clear response format requirements
+- Support for memory and state tracking if desired
 
 ## Project Structure
 
 ```
-├── game_state.py      # Core game state management and rules
-├── game_manager.py    # High-level game flow and player interaction
-├── input_handler.py   # Input processing and validation
-└── main.py           # Example game initialization
+basilisk/
+├── __init__.py
+├── core/
+│   ├── __init__.py
+│   ├── game_state.py      # Game state and rules
+│   ├── game_manager.py    # Game flow and coordination
+│   └── input_handler.py   # Input processing
+├── responders/
+│   ├── __init__.py
+│   ├── base.py           # Responder interface
+│   ├── human/
+│   │   └── responder.py  # Human console interface
+│   └── ollama/
+│       ├── __init__.py
+│       ├── responder.py  # Ollama LLM responder
+│       └── configs/
+│           └── system.txt # System prompt
+└── main.py               # Game setup and initialization
 ```
 
-## Key Components
+## Implementing a Custom Agent
 
-### Game State (`game_state.py`)
-
-The `SecretHitler` class manages the core game state, including:
-- Player roles and status
-- Policy deck and discard pile
-- Government positions
-- Game phase tracking
-- Event logging
-- Private information management
-
-### Game Manager (`game_manager.py`)
-
-`GameManager` handles the high-level game flow:
-- Turn management
-- Player input collection
-- State formatting for players
-- Discussion rounds
-- Game event processing
-
-### Input Handler (`input_handler.py`)
-
-Provides a flexible system for processing player inputs:
-- Abstract `Responder` interface for different player types
-- Input validation and formatting
-- Support for both human and AI players
-- Structured response formats
-
-## Usage
-
-### Basic Setup
+The core interface for implementing an agent is the Responder class:
 
 ```python
-from game_manager import GameManager
+from typing import Any, Dict
+from responders.base import Responder, InputRequest
 
-# Initialize players
-player_ids = ["p1", "p2", "p3", "p4", "p5"]
-player_names = ["Alice", "Bob", "Charlie", "David", "Eve"]
-player_types = {pid: "human" for pid in player_ids}
-
-# Create game instance
-game = GameManager(player_ids, player_names, player_types)
-game.play_game()
-```
-
-### Creating an AI Player
-
-1. Implement the `Responder` interface:
-
-```python
-class ModelResponder(Responder):
-    def __init__(self, system_prompt: str = ""):
-        self.system_prompt = system_prompt
-
+class CustomResponder(Responder):
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
-        """Format request for model and parse response"""
-        # This would be implemented with actual LLM integration
-        # For now, just return a mock response
-        raise NotImplementedError("Model responder not yet implemented")
-
-```
-
-Your responder may keep track of additional state as well for memory purposes and you can prompt for planning chains of thought as long as the final response is parsed into the expected format.
-
-2. Register AI players:
-
-Register your Responder implementation based on a player type.
-
-In `GameManager` `__init__`
-```python
-class GameManager:
-    def __init__(self, player_ids: List[str], player_names: List[str], player_types: Dict[str, str],
-                 discussion_limit: int = 1):
-        self.game = SecretHitler(player_ids, player_names)
-        self.game.discussion_limit = discussion_limit
-        self.input_handler = InputHandler()
+        """
+        Process request and return response matching required format.
         
-        # Register responders for each player
-        for pid in player_ids:
-            if player_types[pid] == "human":
-                self.input_handler.register_responder(pid, HumanResponder())
-            else:
-                self.input_handler.register_responder(pid, ModelResponder())
+        Args:
+            request: InputRequest containing:
+                - input_type: Type of decision needed
+                - context: Complete game state as text
+                - fields: Required response fields
+                - example: Example response format
+        
+        Returns:
+            Dictionary matching the format specified in request.fields
+        """
+        pass
 ```
 
-### Example HumanResponder
+### Input Request Format
 
-The `HumanResponder` `get_response` breaks down the required fields and breaks them into prompts. 
-An LLM responder may instead pass in the context with an API call prompting for a JSON formatted response and validate the response structure. You may prompt for additional chain of thought reasoning so long as you are able to parse out the response format into an appropriate response dict.
-
-<details>
-  <summary> <h3>Human Responder Example</h3></summary>
+Each request contains:
 
 ```python
-class HumanResponder(Responder):
-    def get_response(self, request: InputRequest) -> Dict[str, Any]:
-        print("\n=== Input Request ===")
-        print("\nContext:")
-        print(request.context)
-        
-        response = {}
-        
-        for field in request.fields:
-            print(f"\n{field.prompt}")
-            
-            if field.field_type == "choice" and field.options:
-                print("\nOptions:")
-                for i, option in enumerate(field.options, 1):
-                    print(f"{i}. {option}")
-                
-                while True:
-                    if not field.required:
-                        print("(Press Enter to skip)")
-                    try:
-                        value = input("\nEnter your choice (number): ").strip()
-                        if not field.required and not value:
-                            response[field.name] = field.default
-                            break
-                        choice = int(value) - 1
-                        if 0 <= choice < len(field.options):
-                            response[field.name] = choice
-                            break
-                        print("Invalid choice, try again.")
-                    except ValueError:
-                        print("Please enter a number.")
-                        
-            elif field.field_type == "boolean":
-                while True:
-                    if not field.required:
-                        print("(Press Enter to skip)")
-                    value = input(f"\nEnter choice (y/n): ").lower().strip()
-                    if not field.required and not value:
-                        response[field.name] = field.default
-                        break
-                    if value in ['y', 'n']:
-                        response[field.name] = value == 'y'
-                        break
-                    print("Invalid input. Please enter 'y' or 'n'.")
-                    
-            elif field.field_type == "text":
-                while True:
-                    if not field.required:
-                        print("(Press Enter to skip)")
-                    value = input(f"\nEnter your response: ").strip()
-                    if not value:
-                        if not field.required:
-                            response[field.name] = field.default
-                            break
-                        elif field.required:
-                            print("This field is required.")
-                            continue
-                    else:
-                        response[field.name] = value
-                        break
-        
-        return response
+@dataclass
+class InputRequest:
+    input_type: InputType  # e.g., VOTE, POLICY_SELECTION
+    player_id: str        # ID of player making decision
+    context: str          # Formatted game state
+    fields: List[InputField]  # Required response fields
+    example: ExampleResponse  # Example of valid response
 ```
 
-</details>
-
-## Input/Output Format
-
-### Game State Context 
-
-The game state is formatted as natural language text, including:
-- Current game phase
-- Policy track status
-- Government positions
-- Player status
-- Recent game events
-- Private information (role-specific)
-
-### Input Requests
-
-Input requests are structured with:
-- Input type (e.g., nomination, vote, policy selection)
-- Context (formatted game state)
-- Prompt
-- Response format specification
-- Available options (if applicable)
-
-Example response format:
-```json
-{
-    "choice": 0,
-    "justification": "I trust this player to make good decisions"
-}
+Example request for policy selection:
+```python
+request = InputRequest(
+    input_type=InputType.POLICY_SELECTION,
+    player_id="p1",
+    context="[Game state text]",
+    fields=[
+        InputField(
+            name="policy",
+            field_type="choice",
+            prompt="Choose policy to discard:",
+            options=["Liberal", "Fascist"],
+            required=True
+        ),
+        InputField(
+            name="claimed_policy",
+            field_type="choice",
+            prompt="What policy to claim?",
+            options=["liberal", "fascist", "undisclosed"],
+            required=False,
+            default=2
+        ),
+        InputField(
+            name="justification",
+            field_type="text",
+            prompt="Explain choice:",
+            required=True
+        )
+    ],
+    example=ExampleResponse(
+        values={
+            "policy": 0,
+            "claimed_policy": 2,
+            "justification": "Strategic explanation"
+        }
+    )
+)
 ```
 
-### Examples
+### Game State Context
 
-#### Example 1
-
-##### Context
+The context provided in each request looks like:
 
 ```
-=== Input Request ===
-
-Context:
-
 ==================== Game Status ====================
 
 Turn 2
@@ -253,137 +160,85 @@ As a Fascist, you know:
 ==================== Recent Events ====================
 
 [Turn 1] David voted Nein!
-Reasoning: "sus"
-
-[Turn 1] Eve voted Ja!
-Reasoning: "1"
+Reasoning: "I don't trust this government"
 
 [Turn 1] Election for President Bob and Chancellor Eve: passed
-Reasoning: "Votes: 4/5, Supported by ['Alice', 'Bob', 'Charlie', 'Eve'], Opposed by ['David']"
+Reasoning: "Votes: 4/5"
 
 [Turn 1] President Bob claims to have discarded a fascist policy
-Reasoning: "im cool like that"
-
-[Turn 1] Chancellor Eve enacted a liberal policy (claims to have discarded a liberal policy)
-Reasoning: "yay"
-
+[Turn 1] Chancellor Eve enacted a liberal policy
 ```
 
-##### Prompt
+### Using Your Custom Responder
 
+1. First implement your responder:
+```python
+from responders.base import Responder, InputRequest
+from typing import Dict, Any
+
+class CustomResponder(Responder):
+    def __init__(self, strategy: str = "default"):
+        self.strategy = strategy
+
+    def get_response(self, request: InputRequest) -> Dict[str, Any]:
+        # Your implementation here
+        pass
 ```
 
-Choose a chancellor candidate:
-
-Options:
-1. Alice
-2. David
-
-Enter your choice (number): 2
-
-Explain your nomination:
-
-Enter your response: idk just a hunch good guy
-
+2. Create a function to handle responder creation:
+```python
+def create_custom_responder() -> Responder:
+    return CustomResponder(strategy="aggressive)"
 ```
 
-<details>
-  <summary> <h4>Example 2</h4></summary>
+3. Set up the game with your responder:
+```python
+from pathlib import Path
+from basilisk.main import setup_game, create_human_responder, create_ai_responder
+
+# Define your players
+player_configs = [
+    {"name": "Alice", "type": "custom"},
+    {"name": "Bob", "type": "ai"},
+    {"name": "Charlie", "type": "human"}
+]
+
+def setup_custom_game() -> GameManager:
+    # Setup responder creators with your custom type
+    system_prompt_path = Path("responders/ollama/configs/system.txt")
+    responder_creators = {
+        "human": create_human_responder,
+        "ai": create_ai_responder
+        "custom": create_custom_responder # you may consider using lambdas to invoke create functions with given parameters
+    }
     
-##### Context
+    return GameManager(
+        player_configs=player_configs,
+        responder_creators=responder_creators,
+        discussion_limit=2
+    )
 
-```
-=== Input Request ===
-
-Context:
-
-==================== Game Status ====================
-
-Turn 2
-You are Bob
-Your Role: Liberal
-Current Phase: Voting
-
-Policies Enacted:
-Liberal Track: 🔵⚪⚪⚪⚪ (1/5)
-Fascist Track: ⚪⚪⚪⚪⚪⚪ (0/6)
-
-Current Government:
-President: Charlie
-Nominated Chancellor: David
-
-Last Government: Bob (P), Eve (C)
-
-Players:
-  • Alice
-  • Bob
-  • Charlie (President)
-  • David (Nominated)
-  • Eve
-
-Private Information:
-
-Policy choice as President (1 turns ago):
-Government: You as President with Eve as Chancellor
-Policy counts were: Liberal 0, Fascist 0
-You saw: liberal, liberal, liberal
-You discarded: liberal
-You claimed to discard: fascist
-You passed: liberal, liberal to Chancellor
-(This information expires in 2 turns)
-
-==================== Recent Events ====================
-
-[Turn 1] Eve voted Ja!
-Reasoning: "1"
-
-[Turn 1] Election for President Bob and Chancellor Eve: passed
-Reasoning: "Votes: 4/5, Supported by ['Alice', 'Bob', 'Charlie', 'Eve'], Opposed by ['David']"
-
-[Turn 1] President Bob claims to have discarded a fascist policy
-Reasoning: "im cool like that"
-
-[Turn 1] Chancellor Eve enacted a liberal policy (claims to have discarded a liberal policy)
-Reasoning: "yay"
-
-[Turn 2] Charlie nominated David as Chancellor
-Reasoning: "idk just a hunch good guy"
+# Create and run game
+game = setup_custom_game()
+game.play_game()
 ```
 
-##### Prompt
+This approach allows you to:
+- Define custom creation logic for your responder
+- Initialize with specific parameters
+- Mix different responder types in a game
+- Keep creation logic separate from game setup
 
-```
-Vote on the proposed government:
+## Quick Start
 
-Options:
-1. Ja!
-2. Nein!
-
-Enter your choice (number): 1
-
-Explain your vote:
-
-Enter your response:
-```
-</details>
-
-## Events and Logging
-
-The system maintains a detailed log of game events, including:
-- Government formations
-- Votes
-- Policy enactments
-- Power actions
-- Player discussions
-
-Events are formatted for both human readability and AI processing.
+Check `basilisk/main.py`
+for a sample game setup.
 
 ## Contributing
 
 Contributions are welcome! Please ensure any pull requests:
-1. Include appropriate tests (don't actually have a testing framework yet X_X)
-2. Follow the existing code style
-3. Update documentation as needed
+1. Follow the existing code style
+2. Update documentation as needed
 
 ## License
 
