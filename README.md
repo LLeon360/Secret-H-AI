@@ -63,7 +63,7 @@ class CustomResponder(Responder):
         Args:
             request: InputRequest containing:
                 - input_type: Type of decision needed
-                - context: Complete game state as text
+                - context: Complete game state as an dataclass object
                 - fields: Required response fields
                 - example: Example response format
         
@@ -84,7 +84,7 @@ Each request contains:
 class InputRequest:
     input_type: InputType  # e.g., VOTE, POLICY_SELECTION
     player_id: str        # ID of player making decision
-    context: str          # Formatted game state
+    context: GameState    # game state dataclass which may be formatted to natural language with GameStateTextFormatter 
     fields: List[InputField]  # Required response fields
     example: ExampleResponse  # Example of valid response
 ```
@@ -132,45 +132,60 @@ Example request for policy selection:
 
 ### Game State Context
 
-The context provided in each request looks like:
+The formatted context provided in each request looks like:
 
 ```
+Context:
+
 ==================== Game Status ====================
 
-Turn 2
-You are Charlie
-Your Role: Fascist
-Current Phase: Nominating Chancellor
+Turn 0
+You are Unsuspecting Human
+Your Role: Liberal
+Current Phase: President Discard
 
 Policies Enacted:
-Liberal Track: 🔵⚪⚪⚪⚪ (1/5)
+Liberal Track: ⚪⚪⚪⚪⚪ (0/5)
 Fascist Track: ⚪⚪⚪⚪⚪⚪ (0/6)
 
 Current Government:
-President: Charlie
+President: Unsuspecting Human
+Chancellor: Bot_1
 
-Last Government: Bob (P), Eve (C)
+Last Government: Unsuspecting Human (P), Bot_1 (C)
 
 Players:
-  • Alice
-  • Bob
-  • Charlie (President)
-  • David
-  • Eve (Previously Nominated as Chancellor)
-
-As a Fascist, you know:
-  • David is Hitler
+  • Unsuspecting Human (President)
+  • Bot_1 (Chancellor)
+  • Bot_2
+  • Bot_3
+  • Bot_4
 
 ==================== Recent Events ====================
 
-[Turn 1] David voted Nein!
-Reasoning: "I don't trust this government"
+[Turn 0] Game started with 5 players
+Reasoning: "Game initialized"
 
-[Turn 1] Election for President Bob and Chancellor Eve: passed
-Reasoning: "Votes: 4/5"
+[Turn 0] Unsuspecting Human nominated Bot_1 as Chancellor
+Reasoning: "no"
 
-[Turn 1] President Bob claims to have discarded a fascist policy
-[Turn 1] Chancellor Eve enacted a liberal policy
+[Turn 0] Unsuspecting Human voted Nein!
+Reasoning: "no"
+
+[Turn 0] Bot_1 voted Ja!
+Reasoning: "I am new to the game, and I believe that Bot_1 would be a good Chancellor."
+
+[Turn 0] Bot_2 voted Ja!
+Reasoning: "I support this government. We need to establish a Liberal government to prevent the rise of Fascism."
+
+[Turn 0] Bot_3 voted Ja!
+Reasoning: "I support this government because I believe Bot_1 would make a good Chancellor."
+
+[Turn 0] Bot_4 voted Nein!
+Reasoning: "I am not yet comfortable supporting this government."
+
+[Turn 0] Election for President Unsuspecting Human and Chancellor Bot_1: passed
+Reasoning: "Votes: 3/5, Supported by ['Bot_1', 'Bot_2', 'Bot_3'], Opposed by ['Unsuspecting Human', 'Bot_4']"
 ```
 
 ### Using Your Custom Responder
@@ -186,6 +201,12 @@ class CustomResponder(Responder):
 
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
         # Your implementation here
+
+        # if you would not like to implement a custom formatter/renderer of the game context
+        # call built-in formatter
+        # returns the context str as shown in example
+        formatted_context = GameStateTextFormatter.format_state(request.context, request.player_id) 
+
         pass
 ```
 
