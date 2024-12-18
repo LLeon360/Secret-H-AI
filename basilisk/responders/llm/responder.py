@@ -5,7 +5,9 @@ import json
 import re
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from ..base import Responder, InputRequest, InputField
+from responders.base import Responder, InputRequest, InputField
+
+from formatters import GameStateTextFormatter
 
 @dataclass
 class Memory:
@@ -56,7 +58,8 @@ class LLMResponder(Responder):
         sections.append(f"Recent Events:\n{self.memory.get_recent(self.memory_size)}\n")
         
         # Add current context
-        sections.append(f"Current Situation:\n{request.context}\n")
+        formatted_context = GameStateTextFormatter.format_state(request.context, request.player_id)
+        sections.append(f"Current Situation:\n{formatted_context}\n")
         
         # Add prompt details
         sections.append(f"You are currently considering the following decisions:\n")

@@ -91,41 +91,43 @@ class InputRequest:
 
 Example request for policy selection:
 ```python
-request = InputRequest(
-    input_type=InputType.POLICY_SELECTION,
-    player_id="p1",
-    context="[Game state text]",
-    fields=[
+    fields = [
         InputField(
             name="policy",
             field_type="choice",
-            prompt="Choose policy to discard:",
-            options=["Liberal", "Fascist"],
+            prompt=f"Choose a policy to {action_type}:",
+            options=[f"Policy: {policy.value}" for policy in policies],
             required=True
         ),
         InputField(
             name="claimed_policy",
             field_type="choice",
-            prompt="What policy to claim?",
+            prompt="What policy will you claim to have discarded?",
             options=["liberal", "fascist", "undisclosed"],
             required=False,
-            default=2
+            default=2  # Default to undisclosed
         ),
         InputField(
             name="justification",
             field_type="text",
-            prompt="Explain choice:",
+            prompt="Explain your choice:",
             required=True
         )
-    ],
-    example=ExampleResponse(
-        values={
-            "policy": 0,
-            "claimed_policy": 2,
-            "justification": "Strategic explanation"
-        }
+    ]
+
+    request = InputRequest(
+        input_type=InputType.POLICY_SELECTION,
+        player_id=player_id,
+        context=self.format_context(player_id),
+        fields=fields,
+        example=ExampleResponse(
+            values={
+                "policy": 0,
+                "claimed_policy": 2,
+                "justification": "This advances our team's goals"
+            }
+        )
     )
-)
 ```
 
 ### Game State Context

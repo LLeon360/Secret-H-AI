@@ -1,15 +1,20 @@
 from typing import Any, Dict
 
-from ..base import Responder, InputRequest
+from responders.base import Responder, InputRequest
+
+from formatters.text_formatter import GameStateTextFormatter 
 
 class HumanResponder(Responder):
     """Human responder implementation with console interaction"""
     
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
         """Get response through console interaction"""
+        
+        formatted_context = GameStateTextFormatter.format_state(request.context, request.player_id)
+        
         print("\n=== Input Request ===")
         print("\nContext:")
-        print(request.context)
+        print(formatted_context)
         
         response = {}
         

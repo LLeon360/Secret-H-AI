@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from core.game_state import GameState
 
 class InputType(Enum):
     CHANCELLOR_NOMINATION = "chancellor_nomination"
@@ -32,7 +33,7 @@ class InputRequest:
     """Complete input request with all necessary information"""
     input_type: InputType
     player_id: str
-    context: str
+    context: GameState
     fields: List[InputField]
     example: ExampleResponse
 
