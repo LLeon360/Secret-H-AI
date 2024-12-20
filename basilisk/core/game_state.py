@@ -1,8 +1,9 @@
 from enum import Enum
 from typing import List, Dict, Optional, Tuple, Union, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import random
+from typing import Callable, List
 
 class Role(Enum):
     LIBERAL = "liberal"
@@ -140,6 +141,22 @@ class PolicyChoice:
     justification: str
     claimed_policy: Optional[str]
 
+### Event Callbacks ###
+
+# allows external observers to listen to the occurrence of specific events (or all events)
+
+@dataclass
+class EventCallback:
+    """Wrapper for event callbacks with optional filters"""
+    callback: Callable[[GameEvent], None]
+    event_types: set[GameEventType] = field(default_factory=set)  # Empty means all events
+    
+    def should_notify(self, event: GameEvent) -> bool:
+        """Check if callback should be notified of this event"""
+        return not self.event_types or event.event_type in self.event_types
+
+######################
+
 class SecretHitler:
     def __init__(self, player_ids: List[str], player_names: List[str]):
         if len(player_ids) < 5 or len(player_ids) > 10:
@@ -176,12 +193,16 @@ class SecretHitler:
         
         self.discussion_limit = 5
         
+        # Intialize callbacks
+        self._event_callbacks: List[EventCallback] = []
+    
+    def start_game(self):
         # Initialize the game
         self._initialize_deck()
         self._log_event(
             GameEventType.GAME_START,
             "system",
-            {"player_count": len(player_ids)},
+            {"player_count": len(self.get_active_players())},
             "Game initialized"
         )
 
@@ -215,14 +236,15 @@ class SecretHitler:
     
     def _generate_event_id(self) -> str:
         self.last_event_id += 1
-        return f"event_{self.current_turn}_{self.turn_phase}_{self.last_event_id}"
-
+        return f"event_{self.current_turn}_{self.turn_phase}_{self.last_event_id}"    
+    
     def _log_event(self, 
                    event_type: GameEventType, 
                    actor_id: str, 
                    action_details: Dict[str, Any], 
                    justification: Optional[str] = None,
                    related_events: List[str] = None) -> GameEvent:
+        """Log game event and notify callbacks"""
         event = GameEvent(
             event_id=self._generate_event_id(),
             event_type=event_type,
@@ -235,7 +257,40 @@ class SecretHitler:
             related_events=related_events or []
         )
         self.game_events.append(event)
+        self._notify_event_callbacks(event)
         return event
+    
+    def add_event_callback(self, 
+                          callback: Callable[[GameEvent], None],
+                          event_types: set[GameEventType] = None) -> None:
+        """
+        Register a callback for game events
+        Args:
+            callback: Function to call with GameEvent
+            event_types: Optional set of event types to filter for
+        """
+        self._event_callbacks.append(
+            EventCallback(
+                callback=callback,
+                event_types=set(event_types) if event_types else set()
+            )
+        )
+    
+    def remove_event_callback(self, callback: Callable[[GameEvent], None]) -> None:
+        """Remove a registered callback"""
+        self._event_callbacks = [
+            ec for ec in self._event_callbacks 
+            if ec.callback != callback
+        ]
+    
+    def _notify_event_callbacks(self, event: GameEvent) -> None:
+        """Notify all registered callbacks if they should receive this event"""
+        for event_callback in self._event_callbacks:
+            if event_callback.should_notify(event):
+                try:
+                    event_callback.callback(event)
+                except Exception as e:
+                    print(f"Uncaught error in event callback: {str(e)}")  # TODO Consider better error handling
 
     def add_discussion_message(self, 
                              event_index: int, 

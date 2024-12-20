@@ -10,6 +10,7 @@ from core.game_state import (
 	PolicyChoiceContent, PolicyPeekContent, InvestigationContent,
 	PrivateInfo, GameState, PlayerRole, DiscussionMessage
 )
+from observers.base import GameStateObserver
 import json
 from datetime import datetime
 
@@ -36,16 +37,54 @@ class GameManager:
 		self.game = SecretHitler(self.player_ids, self.player_names)
 		self.game.discussion_limit = discussion_limit
 		self.input_handler = InputHandler()
-	   
-		# Setup responders
-		for pid, config in zip(self.player_ids, player_configs):
-				player_type = config["type"]
-				if player_type not in responder_creators:
-					raise ValueError(f"Unknown player type: {player_type}")
-					
-				responder = responder_creators[player_type]()
-				self.input_handler.register_responder(pid, responder)
 
+		# Initialize observers
+		self.observers: Dict[str, GameStateObserver] = {}
+	   
+		# Setup responders with their player_ids
+		for pid, config in zip(self.player_ids, player_configs):
+			player_type = config["type"]
+			if player_type not in responder_creators:
+				raise ValueError(f"Unknown player type: {player_type}")
+			
+			# Pass player_id to responder creator
+			responder = responder_creators[player_type](pid)
+			self.input_handler.register_responder(pid, responder)
+			
+			# Register observer if responder has one
+			if observer := responder.observer:
+				self.observers[pid] = observer
+	
+		# Register game event handler
+		self.game.add_event_callback(self._on_game_event)
+
+		# Run initial game setup, also send out Game Start event
+		self.game.start_game()
+
+	def register_observer(self, player_id: str, observer: GameStateObserver) -> None:
+		"""Register an observer for a specific player's view"""
+		if player_id not in self.game.players:
+			raise ValueError(f"Invalid player_id: {player_id}")
+		self.observers[player_id] = observer
+		
+		# Send initial state
+		state = self.game.get_game_state(player_id)
+		observer.on_state_change(state, None)  # No triggering event for initial state
+	
+	def remove_observer(self, player_id: str) -> None:
+		"""Remove an observer"""
+		self.observers.pop(player_id, None)
+	
+	def _on_game_event(self, event: GameEvent) -> None:
+		"""Handle game events by notifying relevant observers"""
+		for player_id, observer in self.observers.items():
+			try:
+				state = self.game.get_game_state(player_id)
+				observer.on_state_change(state, event)
+			except Exception as e:
+				print(f"Error notifying observer for player {player_id}: {str(e)}")
+				# Consider removing failed observers or better error handling
+	
 	def handle_chancellor_nomination(self, president_id: str):
 		"""Handle chancellor nomination"""
 		active_players = self.game.get_active_players()

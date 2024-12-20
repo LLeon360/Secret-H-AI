@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from core.game_state import GameState
+from observers.base import GameStateObserver
 
 class InputType(Enum):
     CHANCELLOR_NOMINATION = "chancellor_nomination"
@@ -38,7 +39,14 @@ class InputRequest:
     example: ExampleResponse
 
 class Responder(ABC):
+    def __init__(self, player_id: str):
+        self.player_id = player_id
+        
+    @property
+    def observer(self) -> Optional[GameStateObserver]:
+        """Optional observer binding"""
+        return None
+        
     @abstractmethod
     def get_response(self, request: InputRequest) -> Dict[str, Any]:
-        """Process request and return response"""
         pass

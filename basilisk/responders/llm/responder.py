@@ -26,12 +26,14 @@ class Memory:
 
 class LLMResponder(Responder):
     def __init__(self, 
+                 player_id: str,
                  system_prompt_path: Optional[str],
                  llm: BaseChatModel,
                  memory_size: int,
                  max_retries: int = 3,
                  show_internal_thinking: bool = False,
                  debug: bool = False):
+        super().__init__(player_id)
         self.llm = llm
         self.memory = Memory(max_items=memory_size)
         self.max_retries = max_retries
