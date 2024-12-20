@@ -126,7 +126,7 @@ class GameStateTextFormatter:
         text = [f"\n{main_text}"]
         
         if event.justification:
-            text.append(f"Reasoning: \"{event.justification}\"")
+            text.append(f"Justification: \"{event.justification}\"")
             
         if event.discussion:
             text.append("\nDiscussion:")
@@ -136,8 +136,13 @@ class GameStateTextFormatter:
         return "\n".join(text)
 
     @classmethod
-    def format_state(cls, state: GameState, player_id: str) -> str:
+    def format_state(cls, state: GameState, player_id: str, max_event_count: int=-1) -> str:
         """Format complete game state into readable text"""
+        
+        # Show all events if max_event_count is negative (-1) is unlimited events
+        if max_event_count < 0:
+            max_event_count = len(state.events)
+        
         context = [
             f"\n{'='*20} Game Status {'='*20}",
             f"\nTurn {state.turn}",
@@ -224,6 +229,6 @@ class GameStateTextFormatter:
         ])
         
         if state.events:
-            context.extend([cls.format_event(event, state.players) for event in state.events[-15:]])
+            context.extend([cls.format_event(event, state.players) for event in state.events[-max_event_count:]])
         
         return "\n".join(context)
