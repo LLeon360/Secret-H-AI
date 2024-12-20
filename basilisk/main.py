@@ -13,14 +13,13 @@ def create_human_responder() -> Responder:
     return HumanResponder()
 
 def create_ai_responder(
-    config_dir: str = "responders/ollama/configs",
-    model_name: str = "llama2"
+    config_dir: str = "responders/llm/configs",
 ) -> Responder:
     system_prompt_path = Path(config_dir) / "system.txt"
     llm = ChatGoogleGenerativeAI(
-        model="gemini-pro",
+        model="gemini-2.0-flash-exp",
         api_key=google_api_key,
-        temperature=0.7,  # Adjust the temperature as needed
+        temperature=1,  # Adjust the temperature as needed
         allow_unsafe_outputs=True  # Allow unsafe outputs
     )
     return LLMResponder(
@@ -28,7 +27,7 @@ def create_ai_responder(
         llm = llm,
         memory_size = 10,
         max_retries = 3,
-        show_internal_thinking = False,
+        show_internal_thinking = True,
         debug = False
     )
 

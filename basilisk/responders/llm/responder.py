@@ -45,6 +45,8 @@ class LLMResponder(Responder):
             path = Path(system_prompt_path)
             if path.exists():
                 self.system_prompt = path.read_text()
+            else:
+                raise FileNotFoundError(f"System prompt file not found: {system_prompt_path}")
     
     def _build_prompt(self, request: InputRequest) -> str:
         """Build prompt with system instructions, memory, context, and required format"""
@@ -89,7 +91,7 @@ class LLMResponder(Responder):
             "</reasoning>\n\n"
             
             "<decision>\n"
-            f"Provide your decision in this JSON format:\n{json.dumps(request.example.values, indent=2)}\n"
+            f"Provide your decision in this JSON format (do NOT wrap your response in a codeblock of backticks):\n{json.dumps(request.example.values, indent=2)}\n"
             "</decision>"
         )
         
@@ -107,7 +109,14 @@ class LLMResponder(Responder):
         try:
             return json.loads(decision_str)
         except json.JSONDecodeError:
-            raise ValueError("Invalid decision JSON format")
+            try:
+                # Attempt to fix common JSON formatting issues
+                
+                # Remove potential ```json ``` wrapping codeblock
+                decision_str = re.sub(r"```json\s*|```", "", decision_str)
+                return json.loads(decision_str)
+            except json.JSONDecodeError:
+                raise ValueError("Invalid decision JSON format")            
         
     def _validate_decision(self, decision: Dict[str, Any], fields: List[InputField]) -> bool:
         """Validate the decision JSON against the required fields and their types"""
