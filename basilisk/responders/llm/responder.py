@@ -59,7 +59,7 @@ class LLMResponder(Responder):
             sections.append(f"System Instructions:\n{self.system_prompt}\n")
             
         # Add memory context
-        sections.append(f"Recent Events:\n{self.memory.get_recent(self.memory_size)}\n")
+        sections.append(f"Recent Events (Your Memory Buffer):\n{self.memory.get_recent(self.memory_size)}\n")
         
         # Add current context
         formatted_context = GameStateTextFormatter.format_state(request.context, request.player_id)
@@ -145,6 +145,10 @@ class LLMResponder(Responder):
                 
                 if self.show_internal_thinking:
                     print(response)
+                    
+                # if response is list of responses, take the last one
+                if isinstance(response, list):
+                    response = response[-1]
                 
                 # Extract sections
                 if memory_update := self._extract_section(response, "memory_update"):

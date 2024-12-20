@@ -17,7 +17,7 @@ def init_llm() -> BaseChatModel:
         raise ValueError("GOOGLE_API_KEY environment variable not set")
             
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",  
+        model="gemini-2.0-flash-thinking-exp",  
         api_key=api_key,
         temperature=1.0,
         top_p=0.95,
@@ -41,7 +41,9 @@ def create_ai_responder(
         system_prompt_path=Path(config_dir) / "system.txt",
         llm=llm,
         memory_size=10,
-        max_retries=3
+        max_retries=3,
+        show_internal_thinking=True,
+        debug=False
     )
 
 def setup_game(
