@@ -81,7 +81,7 @@ class GameManager:
 			example=ExampleResponse(
 				values={
 					"candidate": 0,
-					"justification": "I trust this player's judgment"
+					"justification": "I trust this player's judgment because..."
 				}
 			)
 		)
@@ -119,7 +119,7 @@ class GameManager:
 			example=ExampleResponse(
 				values={
 					"vote": 0,
-					"justification": "I support this government"
+					"justification": "I support this government because..."
 				}
 			)
 		)
@@ -169,7 +169,7 @@ class GameManager:
 				values={
 					"policy": 0,
 					"claimed_policy": 2,
-					"justification": "This advances our team's goals"
+					"justification": "This advances our team's goals because..."
 				}
 			)
 		)
@@ -307,7 +307,7 @@ class GameManager:
 					example=ExampleResponse(
 						values={
 							"want_to_speak": True,
-							"message": "I think we should be careful about this decision"
+							"message": "I think..."
 						}
 					)
 				)
@@ -398,4 +398,5 @@ class GameManager:
 					return
 					
 		print("\nGame Over!")
-		print(self.format_context("system"))
+		print("==========")
+		
