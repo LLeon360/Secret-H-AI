@@ -3,7 +3,7 @@ from typing import Dict, List, Callable, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from core.game_manager import GameManager, ResponderCreator
-from responders import HumanResponder, LLMResponder, StreamlitResponder, Responder
+from responders import HumanResponder, LLMResponder, Responder
 
 from dotenv import load_dotenv
 import os
@@ -27,9 +27,6 @@ def init_llm() -> BaseChatModel:
 
 def create_human_responder(player_id: str) -> Responder:
     return HumanResponder(player_id)
-
-def create_streamlit_responder(player_id: str) -> Responder:
-    return StreamlitResponder(player_id)
 
 def create_ai_responder(
     player_id: str,
@@ -57,7 +54,6 @@ def setup_game(
         
     responder_creators = {
         "human": create_human_responder,
-        "streamlit": create_streamlit_responder,
         "ai": lambda pid: create_ai_responder(pid, llm)
     }
     
@@ -120,38 +116,7 @@ def setup_human_vs_ai_game(
         llm=llm,
         discussion_limit=discussion_limit
     )
-
-# Streamlit-specific setup
-def setup_streamlit_game(
-    human_player_name: str,
-    ai_player_count: int = 4,
-    discussion_limit: int = 2,
-    llm: Optional[BaseChatModel] = None
-) -> GameManager:
-    """Setup game with Streamlit UI for human player"""
-    if llm is None:
-        llm = init_llm()
-        
-    player_configs = [
-        {
-            "name": human_player_name,
-            "type": "streamlit"
-        }
-    ]
-    player_configs += [
-        {
-            "name": f"Bot_{i+1}",
-            "type": "ai"
-        }
-        for i in range(ai_player_count)
-    ]
     
-    return setup_game(
-        player_configs=player_configs,
-        llm=llm,
-        discussion_limit=discussion_limit
-    )
-
 if __name__ == "__main__":
     # Run console-based game when script is run directly
     try:
