@@ -3,7 +3,8 @@ from typing import Dict, List, Callable, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from core.game_manager import GameManager, ResponderCreator
-from responders import HumanResponder, LLMResponder, StreamlitResponder, Responder
+from responders import HumanResponder, LLMResponder, Responder
+import transformers
 
 from dotenv import load_dotenv
 import os
@@ -25,11 +26,56 @@ def init_llm() -> BaseChatModel:
         allow_unsafe_outputs=True
     )
 
+def init_llm_local(model_name = "Qwen/Qwen2.5-3B-Instruct") -> BaseChatModel:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    class localLLM(BaseChatModel):
+        def __init__(self, model_name):
+            self.llm = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype="bfloat16",
+            device_map="auto"
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        @property
+        def _llm_type(self) -> str:
+            return "qwen"
+
+        def invoke(self, prompt):
+            model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.llm.device)
+
+            generated_ids = self.llm.generate(
+                **model_inputs,
+                max_new_tokens=1024
+            )
+            generated_ids = [
+                output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+            ]
+
+            response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+            return response
+        
+        def _generate(self, prompt):
+            model_inputs = self.tokenizer([prompt], return_tensors="pt").to(self.llm.device)
+
+            generated_ids = self.llm.generate(
+                **model_inputs,
+                max_new_tokens=1024
+            )
+            generated_ids = [
+                output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+            ]
+
+            response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+            return response
+
+    return localLLM(model_name)
+
 def create_human_responder(player_id: str) -> Responder:
     return HumanResponder(player_id)
 
-def create_streamlit_responder(player_id: str) -> Responder:
-    return StreamlitResponder(player_id)
 
 def create_ai_responder(
     player_id: str,
@@ -156,7 +202,7 @@ if __name__ == "__main__":
     # Run console-based game when script is run directly
     try:
         # Initialize LLM once for reuse
-        llm = init_llm()
+        llm = init_llm_local()
         
         # Create and run human vs AI game
         game = setup_human_vs_ai_game(
