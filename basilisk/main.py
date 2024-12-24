@@ -75,10 +75,6 @@ def init_llm_local(model_name = "Qwen/Qwen2.5-3B-Instruct") -> BaseChatModel:
 def create_human_responder(player_id: str) -> Responder:
     return HumanResponder(player_id)
 
-<<<<<<< HEAD
-
-=======
->>>>>>> refs/remotes/origin/main
 def create_ai_responder(
     player_id: str,
     llm: BaseChatModel,
