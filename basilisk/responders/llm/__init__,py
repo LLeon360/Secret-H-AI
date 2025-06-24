@@ -1,4 +1,0 @@
-# responders/ollama/__init__.py
-from .responder import OllamaResponder
-
-__all__ = ['OllamaResponder']
